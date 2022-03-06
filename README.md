@@ -54,16 +54,24 @@ The messages sent back and forth between the treadmill use a fairly straight for
    is usually sufficient between writes to let the treadmill catch up.
 
 ## Messages
-| Name             | Code   | Request                                | Response                 | ACK Type     | Direction         |
-|------------------|--------|----------------------------------------|--------------------------|--------------|-------------------|
-| Acknowledge      | `0x00` | N/A                                    | `5b0400094f4b5d`         | None         | Both              |
-| Set Workout Mode | `0x02` | `5B0202025D`                           | `5B0202025D`             | Echo         | Host -> Treadmill |
-| Workout Mode     | `0x03` | `5B0203015D`                           | `5B0203015D`             | Echo         | Treadmill -> Host |
-| Workout Target   | `0x04` | `5B05040A0000005D`                     | `5b0400044f4b5d`         | ACK          | Host -> Treadmill |
-| Workout Data     | `0x06` | `5b0f06093b0000000000050000000000015d` | `5b0400064f4b5d`         | ACK          | Treadmill -> Host |
-| User Profile     | `0x07` | `5B06070123009B435D`                   | `5b0400074f4b5d`         | ACK          | Host -> Treadmill |
-| Program Type     | `0x08` | `5b030810015d`                         | `5b0400084f4b5d`         | ACK          | Host -> Treadmill |
-| Heart Rate Type  | `0x09` | `5b030901005d`                         | `5b0400094f4b5d`         | ACK          | Treadmill -> Host |
-| Error Code       | `0x10` | `5b0210005d`                           | `5b0400104f4b5d`         | ACK          | Treadmill -> Host |
-| End Workout      | `0x32` | `5b0a320013000000000800005d`           | `5b0400324f4b5d`         | ACK          | Treadmill -> Host |
-| Get Device Info  | `0xF0` | `5B01F05D`                             | `5B08F092000178050F125D` | Echo (Kinda) | Host -> Treadmill |
+| Name                                                                                                                               | Code   | Request                                | Response                 | ACK Type     | Direction         |
+|------------------------------------------------------------------------------------------------------------------------------------|--------|----------------------------------------|--------------------------|--------------|-------------------|
+| [Acknowledge](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L353-L392)      | `0x00` | N/A                                    | `5b0400094f4b5d`         | None         | Both              |
+| [Set Workout Mode](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L165-L193) | `0x02` | `5B0202025D`                           | `5B0202025D`             | Echo         | Host -> Treadmill |
+| [Workout Mode](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L135-L163)     | `0x03` | `5B0203015D`                           | `5B0203015D`             | Echo         | Treadmill -> Host |
+| [Workout Target](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L394-L431)   | `0x04` | `5B05040A0000005D`                     | `5b0400044f4b5d`         | ACK          | Host -> Treadmill |
+| [Workout Data](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L226-L306)     | `0x06` | `5b0f06093b0000000000050000000000015d` | `5b0400064f4b5d`         | ACK          | Treadmill -> Host |
+| [User Profile](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L308-L351)     | `0x07` | `5B06070123009B435D`                   | `5b0400074f4b5d`         | ACK          | Host -> Treadmill |
+| [Program Type](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L918-L950)     | `0x08` | `5b030810015d`                         | `5b0400084f4b5d`         | ACK          | Host -> Treadmill |
+| [Heart Rate Type](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L195-L224)  | `0x09` | `5b030901005d`                         | `5b0400094f4b5d`         | ACK          | Treadmill -> Host |
+| [Error Code](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L463-L491)       | `0x10` | `5b0210005d`                           | `5b0400104f4b5d`         | ACK          | Treadmill -> Host |
+| [End Workout](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L793-L841)      | `0x32` | `5b0a320013000000000800005d`           | `5b0400324f4b5d`         | ACK          | Treadmill -> Host |
+| [Get Device Info](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L83-L133)   | `0xF0` | `5B01F05D`                             | `5B08F092000178050F125D` | Echo (Kinda) | Host -> Treadmill |
+
+Notes:
+* Speeds are specified in the units returned in the 
+  [Get Device Info](https://github.com/swedishborgie/treadonme/blob/04766d37a14b0fe02de2ea07d837dd8bc7e7d908/messages.go#L83-L133)
+  message and are specified in either kilometers per hour (for metric) or miles per hour (for imperial) and the value is
+  multiplied by ten. So for instance if the units are imperial and the speed indicated is 62 the speed would be 6.2 miles per hour.
+* Similarly, distances are specified in either kilometers or miles and are multiplied by one hundred. So if a distance of 102
+  is returned and the units are imperial it would indicate a distance of 1.02 miles.
