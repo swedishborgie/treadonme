@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Treadmill Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            color: white;
+            font-family: 'Droid Sans Mono', 'Ubuntu Mono', 'sans-serif';
+        }
+        table {
+            width: 100%
+        }
+        th {
+            font-size: 2.5vw;
+        }
+        td {
+            text-align: center;
+            font-size: 4vw;
+        }
+        #status {
+            float: right;
+        }
+        #error {
+            color: red;
+        }
+        .connected {
+            color: green;
+        }
+        .disconnected {
+            color: gray;
+        }
+    </style>
+    <script type="application/javascript">
+        let socket;
+
+        function connect() {
+            const serverStatus = document.getElementById("server_status")
+            const treadmillStatus = document.getElementById("treadmill_status")
+            const startButton = document.getElementById("start")
+            const errorLabel = document.getElementById("error")
+
+            socket = new WebSocket("ws://"+location.host+"/ws")
+            socket.addEventListener("open", ()=>{
+                startButton.disabled=false
+                serverStatus.innerText = "Connected"
+                serverStatus.classList.remove("disconnected")
+                serverStatus.classList.add("connected")
+                resetWorkoutData()
+            })
+            socket.addEventListener("close", ()=> {
+                startButton.disabled=true
+                serverStatus.innerText = "Disconnected"
+                serverStatus.classList.remove("connected")
+                serverStatus.classList.add("disconnected")
+                resetWorkoutData()
+
+                setTimeout(()=>connect(), 1000)
+            })
+            socket.addEventListener("message", (msgRaw) => {
+                const msg = JSON.parse(msgRaw.data)
+                if (msg.Error) {
+                    errorLabel.innerText = msg.Error
+                    console.log(msg.Error)
+                    return
+                }
+
+                switch (msg.Type) {
+                    case "DeviceInfo":
+                        startButton.style.display = "none"
+                        break
+                    case "WorkoutMode":
+                        switch(msg.Message.Mode) {
+                            case 1:
+                                treadmillStatus.innerText = "Idle"
+                                break;
+                            case 2:
+                                treadmillStatus.innerText = "Start"
+                                break;
+                            case 4:
+                                treadmillStatus.innerText = "Running"
+                                break;
+                            case 6:
+                                treadmillStatus.innerText = "Pause"
+                                break;
+                            case 7:
+                                treadmillStatus.innerText = "Done"
+                                break;
+                            default:
+                                treadmillStatus.innerText = msg.Message.Mode
+                        }
+                        break;
+                    case "EndWorkout":
+                        startButton.style.display = "block"
+                        break
+                    case "WorkoutData":
+                        handleWorkoutData(msg.Message)
+                        break
+                }
+            })
+        }
+        function init() {
+            connect()
+            
+            document.getElementById("start").addEventListener("click", ()=>{
+                document.getElementById("error").innerText = ""
+
+                socket.send(JSON.stringify({"Command": "start"}))
+            })
+        }
+
+        function handleWorkoutData(data) {
+            document.getElementById("duration").innerText = (data.Minute+"").padStart(2, "0") +":"+ (data.Second+"").padStart(2, "0")
+            document.getElementById("distance").innerText = (data.Distance/100.0).toFixed(2);
+            document.getElementById("calories").innerText = data.Calories;
+            document.getElementById("speed").innerText = (data.Speed/10.0).toFixed(1);
+            document.getElementById("pace").innerText = convertMPHToPace(data.Speed/10.0);
+            document.getElementById("incline").innerText = data.Incline;
+            document.getElementById("heartrate").innerText = data.HeartRate;
+
+        }
+
+        function resetWorkoutData() {
+            handleWorkoutData({
+                "Minute": 0,
+                "Second": 0,
+                "Distance": 0,
+                "Calories": 0,
+                "Speed": 0,
+                "Incline": 0,
+                "HeartRate": 0
+            })
+        }
+
+        function convertMPHToPace(mph) {
+            if (mph === 0) { return "00:00" }
+            let minutesPart = 60/mph
+            let secondsPart = minutesPart%1
+            minutesPart = Math.floor(minutesPart)
+            secondsPart = Math.round(secondsPart*60)
+
+            return (minutesPart+"").padStart(2,"0") + ":" + (secondsPart+"").padStart(2, "0")
+        }
+
+        document.addEventListener("DOMContentLoaded", ()=>init())
+    </script>
+</head>
+<body>
+<table>
+    <tr>
+        <th>Time</th>
+        <th>Distance</th>
+        <th>Calories</th>
+        <th>Speed</th>
+        <th>Pace</th>
+        <th>Incline</th>
+        <th>Heart Rate</th>
+    </tr>
+    <tr>
+        <td><span id="duration"></span></td>
+        <td><span id="distance"></span>m</td>
+        <td><span id="calories"></span></td>
+        <td><span id="speed"></span> mph</td>
+        <td><span id="pace"></span></td>
+        <td><span id="incline"></span></td>
+        <td><span id="heartrate"></span> bpm</td>
+    </tr>
+</table>
+<div id="status">Socket: <span id="server_status">Disconnected</span> Treadmill: <span id="treadmill_status">Idle</span></div>
+<button id="start" disabled>Start Workout</button>
+<div id="error"></div>
+</body>
+</html>
