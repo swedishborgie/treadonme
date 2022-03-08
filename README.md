@@ -1,4 +1,4 @@
-#Tread on Me
+# Tread on Me
 
 A Go library and integrated web server for interacting with BLE equipped treadmills by Sole (at least the Sole F80)
 from Linux.
