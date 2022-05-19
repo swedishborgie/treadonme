@@ -8,19 +8,23 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/swedishborgie/treadonme"
+	"github.com/urfave/cli/v2"
 )
 
 //go:embed static/*
 var staticFS embed.FS
 
 type webserver struct {
-	macAddress string
-	tmClient   *treadonme.Treadmill
-	tmMutex    sync.Mutex
-	devInfo    *treadonme.MessageDeviceInfo
+	bindAddr       string
+	macAddress     string
+	connectTimeout time.Duration
+	tmClient       *treadonme.Treadmill
+	tmMutex        sync.Mutex
+	devInfo        *treadonme.MessageDeviceInfo
 
 	wsClients []*websocket.Conn
 	wsMutex   sync.Mutex
@@ -37,23 +41,51 @@ type MessageWrapper struct {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		log.Printf("usage: treadmill [mac addr]")
-
-		os.Exit(1)
-
-		return
+	app := &cli.App{
+		Name:        "treadonme",
+		Description: "a small web server for getting live telemetry from sole treadmills",
+		Action:      run,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "bind-address",
+				Usage:   "the socket address to bind to",
+				EnvVars: []string{"TREAD_BIND_ADDRESS"},
+				Value:   ":8089",
+			},
+			&cli.StringFlag{
+				Name:     "mac-address",
+				Usage:    "the mac address of the treadmill",
+				EnvVars:  []string{"TREAD_MAC_ADDRESS"},
+				Required: true,
+			},
+			&cli.DurationFlag{
+				Name:    "connect-timeout",
+				Usage:   "the amount of time to wait before timing out on connect",
+				EnvVars: []string{"TREAD_CONNECT_TIMEOUT"},
+				Value:   60 * time.Second,
+			},
+		},
 	}
 
-	ws := &webserver{macAddress: os.Args[1]}
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run(cliCtx *cli.Context) error {
+	ws := &webserver{
+		bindAddr:       cliCtx.String("bind-address"),
+		macAddress:     cliCtx.String("mac-address"),
+		connectTimeout: cliCtx.Duration("connect-timeout"),
+	}
+
+	log.Printf("starting server listening on %s looking for treadill at %s", ws.bindAddr, ws.macAddress)
 
 	if err := ws.start(); err != nil {
-		log.Printf("failed to start webserver: %s", err)
-
-		os.Exit(2)
+		return err
 	}
 
-	os.Exit(0)
+	return nil
 }
 
 func (ws *webserver) start() error {
@@ -64,7 +96,7 @@ func (ws *webserver) start() error {
 	http.Handle("/", http.FileServer(http.FS(subDir)))
 	http.HandleFunc("/ws", ws.wsEndpoint)
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(ws.bindAddr, nil); err != nil {
 		return err
 	}
 

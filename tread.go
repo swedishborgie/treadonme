@@ -64,15 +64,47 @@ func (t *Treadmill) Connect(ctx context.Context) error {
 		t.bleDevice = bleDevice
 	}
 
-	dev, err := ble.Connect(ctx, func(a ble.Advertisement) bool {
-		return a.Addr().String() == t.addr.String()
+	cleanUp := func() {
+		if err := t.Close(); err != nil {
+			log.Printf("failed to clean up after failed connect: %s", err)
+		}
+	}
+
+	var (
+		mutex sync.Mutex
+		found bool
+	)
+
+	// Limit the amount of time we'll try to connect to something reasonable.
+	toContext, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	dev, err := ble.Connect(toContext, func(a ble.Advertisement) bool {
+		// Discovered this can fire multiple times concurrently which can cause multiple connection attempts in the
+		// event we get two beacons quickly. Mutex this call and only return true once.
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		if !found && a.Addr().String() == t.addr.String() {
+			log.Printf("found treadmill %s, connecting", a.Addr().String())
+
+			found = true
+
+			return true
+		}
+
+		return false
 	})
 	if err != nil {
+		defer cleanUp()
+
 		return fmt.Errorf("problem connecting to treadmill: %w", err)
 	}
 
 	svcs, err := dev.DiscoverServices([]ble.UUID{serviceUUID})
 	if err != nil {
+		defer cleanUp()
+
 		return fmt.Errorf("failed to discover services on treadmill: %w", err)
 	} else if len(svcs) == 0 {
 		return fmt.Errorf("%w: %s", ErrMissingService, serviceUUID.String())
@@ -80,6 +112,8 @@ func (t *Treadmill) Connect(ctx context.Context) error {
 
 	chrs, err := dev.DiscoverCharacteristics([]ble.UUID{writeUUID, notifyUUID}, svcs[0])
 	if err != nil {
+		defer cleanUp()
+
 		return fmt.Errorf("failed to discover characteristics on treadmill: %w", err)
 	} else if len(chrs) != 2 {
 		return fmt.Errorf("%w: expected 2, got: %d", ErrMissingCharacteristic, len(chrs))
@@ -95,10 +129,14 @@ func (t *Treadmill) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	} else if len(desc) == 0 {
+		defer cleanUp()
+
 		return fmt.Errorf("%w: %d", ErrMissingDescriptor, len(desc))
 	}
 
 	if err := dev.Subscribe(t.notifyChr, false, t.recv); err != nil {
+		defer cleanUp()
+
 		return fmt.Errorf("failed to subscribe to notify characteristic: %w", err)
 	}
 
